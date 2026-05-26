@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Install Arusha's Naomii signature</title>
+  <style>
+    body { font-family: Arial,sans-serif; max-width:720px; margin:24px auto; padding:20px; background:#f4f6f8; color:#1a1a1a; }
+    .ui h1 { font-size:20px; margin:0 0 6px; font-family:'Syne',Arial,sans-serif; }
+    .ui p { font-size:13px; line-height:1.6; margin:0 0 12px; color:#555; }
+    .ui ol { font-size:13px; line-height:1.7; margin:0 0 16px 18px; color:#444; }
+    .actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:14px 0 18px; }
+    button.copy-btn { background:#0c1a33; color:#91D8F4; border:1px solid #91D8F4; padding:12px 22px; font-size:14px; font-weight:700; border-radius:6px; cursor:pointer; }
+    button.copy-btn:hover { background:#13264C; }
+    .status { font-size:12px; min-height:18px; padding:6px 10px; border-radius:4px; }
+    .status.ok { color:#0a7a2e; background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.3); }
+    .status.err { color:#b00020; background:rgba(176,0,32,0.08); border:1px solid rgba(176,0,32,0.3); }
+    .preview-wrap { background:#fff; padding:18px; border:1px solid #e0e3e7; border-radius:8px; margin-top:8px; }
+    .preview-wrap h2 { font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:#888; margin:0 0 12px; font-weight:600; }
+    .tip { font-size:11px; color:#888; margin-top:14px; }
+  </style>
+</head>
+<body>
+  <div class="ui">
+    <h1>Install your Naomii email signature</h1>
+    <p>One click to copy. Then paste into your Gmail signature settings and save.</p>
+    <ol>
+      <li>Click <strong>📋 Copy signature</strong> below.</li>
+      <li>Open Gmail → <strong>⚙ → See all settings → General</strong> → scroll to <strong>Signature</strong>.</li>
+      <li>Click your existing signature in the list, select all of the old version in the editor (Ctrl+A / Cmd+A), Delete, then Paste (Ctrl+V / Cmd+V).</li>
+      <li>Scroll down and click <strong>Save Changes</strong>.</li>
+    </ol>
+    <div class="actions">
+      <button class="copy-btn" id="copy-btn" type="button">📋 Copy signature</button>
+      <div class="status" id="status"></div>
+    </div>
+  </div>
+
+  <div class="preview-wrap">
+    <h2>Preview</h2>
+    <div id="signature-preview">Loading…</div>
+  </div>
+
+  <p class="tip">Tip: send yourself a test email from your phone first to confirm the banner renders edge-to-edge.</p>
+
+  <script>
+    var SIGNATURE_URL = './arusha.html';
+    var preview = document.getElementById('signature-preview');
+    var btn = document.getElementById('copy-btn');
+    var status = document.getElementById('status');
+    var signatureHtml = '';
+
+    function setStatus(msg, ok) {
+      status.textContent = msg;
+      status.className = 'status ' + (ok ? 'ok' : 'err');
+    }
+
+    fetch(SIGNATURE_URL, { cache: 'no-cache' })
+      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(function(html) {
+        signatureHtml = html;
+        preview.innerHTML = html;
+      })
+      .catch(function(e) {
+        preview.innerHTML = '<div style="color:#b00020;font-size:13px;">Failed to load signature: ' + e.message + '</div>';
+        btn.disabled = true;
+      });
+
+    btn.addEventListener('click', async function() {
+      if (!signatureHtml) { setStatus('Signature still loading — try again in a second.', false); return; }
+      // Prefer the modern Clipboard API which carries text/html so Gmail
+      // pastes the rich formatted signature, not raw markup.
+      try {
+        if (navigator.clipboard && window.ClipboardItem) {
+          var htmlBlob = new Blob([signatureHtml], { type: 'text/html' });
+          var textBlob = new Blob([preview.innerText || ''], { type: 'text/plain' });
+          await navigator.clipboard.write([new ClipboardItem({
+            'text/html': htmlBlob,
+            'text/plain': textBlob
+          })]);
+          setStatus('✓ Copied. Paste it into your Gmail signature settings now.', true);
+          return;
+        }
+        throw new Error('Clipboard API unavailable');
+      } catch (e) {
+        // Fallback: select the rendered preview + execCommand('copy').
+        // Works in older browsers that don't support ClipboardItem.
+        try {
+          var range = document.createRange();
+          range.selectNodeContents(preview);
+          var sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+          var ok = document.execCommand('copy');
+          sel.removeAllRanges();
+          if (ok) setStatus('✓ Copied. Paste it into your Gmail signature settings now.', true);
+          else setStatus('Copy blocked by browser. Select the signature in the preview below and Ctrl/Cmd+C manually.', false);
+        } catch (fallbackErr) {
+          setStatus('Copy failed: ' + (fallbackErr.message || e.message) + '. Select the preview below + Ctrl/Cmd+C manually.', false);
+        }
+      }
+    });
+  </script>
+</body>
+</html>
